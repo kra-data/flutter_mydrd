@@ -1,0 +1,53 @@
+# Flutter/Dart
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# App secrets
+.env
+.env.*
+!.env.example
+
+# Android
+android/.gradle/
+android/local.properties
+# signing files (절대 커밋 금지)
+android/key.properties
+*.jks
+*.keystore
+macos/
+windows/
+linux/
+web/
+# iOS (CocoaPods & Flutter generated)
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/ephemeral/
+ios/Pods/
+ios/.symlinks/
+# Xcode user files
+**/*.xcuserstate
+**/*.xcuserdatad/
+**/*.xcworkspace/xcuserdata/
+# Derived data (보통 사용자 홈에 있지만 혹시 프로젝트 안 생길 경우)
+ios/DerivedData/
+# 빌드 산출물
+**/*.ipa
+**/*.dSYM
+**/*.dSYM.zip
+
+# Fastlane (쓰면)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
