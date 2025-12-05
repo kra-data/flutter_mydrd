@@ -63,6 +63,7 @@ flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/images/loading.gif
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
@@ -100,13 +101,9 @@ flutter_icons:
   remove_alpha_ios: true # 투명 픽셀 제거(권장)
 
 flutter_native_splash:
-  android: true
-  ios: true
-  color: '#e2f0ff' # 웹의 배경색과 맞추면 전환이 자연스러움
-  image: assets/splash/splash.png
-  ios_content_mode: scaleAspectFill
-  android_gravity: fill
+  color: '#FFFFFF' # 스플래시 배경색
+  image: assets/images/splash.png
   android_12:
-    color: '#e2f0ff' # 안드12는 규칙이 달라 별도 섹션 제공
-    color_dark: '#0B1220'
+    image: assets/images/splash.png
+    icon_background_color: '#FFFFFF'
   web: false # 웹뷰 앱이므로 불필요

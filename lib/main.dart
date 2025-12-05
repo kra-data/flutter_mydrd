@@ -15,8 +15,11 @@ Future<void> main() async {
     await InAppWebViewController.setWebContentsDebuggingEnabled(true);
   }
 
-  // 풀스크린(상단/하단 바 자동 숨김)
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  // 시스템 상단/하단 바가 보이도록
+  SystemChrome.setEnabledSystemUIMode(
+    SystemUiMode.edgeToEdge,
+    overlays: [SystemUiOverlay.top, SystemUiOverlay.bottom],
+  );
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -24,13 +27,20 @@ Future<void> main() async {
     ),
   );
 
-  runApp(
-    const MaterialApp(
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Attendance (WebView)',
-      home: WebShell(),
-    ),
-  );
+      home: WebShell(), // ⬅️ 앱 시작하면 바로 WebShell(웹뷰)로
+    );
+  }
 }
 
 class WebShell extends StatefulWidget {
@@ -71,7 +81,7 @@ class _WebShellState extends State<WebShell> {
       },
     );
 
-    // 초기 상태 1회 확인 (이미 있으니 유지)
+    // 초기 상태 1회 확인
     Connectivity().checkConnectivity().then((res) {
       final off = (res is List<ConnectivityResult>)
           ? res.every((e) => e == ConnectivityResult.none)
@@ -80,7 +90,7 @@ class _WebShellState extends State<WebShell> {
       if (mounted) setState(() {});
     });
 
-    // ✅ 실시간 변경 구독 추가
+    // 실시간 변경 구독
     _connSub = Connectivity().onConnectivityChanged.listen((event) {
       bool off;
       if (event is List<ConnectivityResult>) {
@@ -103,6 +113,7 @@ class _WebShellState extends State<WebShell> {
   @override
   Widget build(BuildContext context) {
     final initialUrl = _url.isEmpty ? WebUri('about:blank') : WebUri(_url);
+    final mediaPadding = MediaQuery.of(context).padding;
 
     return WillPopScope(
       onWillPop: () async {
@@ -126,165 +137,189 @@ class _WebShellState extends State<WebShell> {
         return true;
       },
       child: Scaffold(
-        body: Stack(
-          children: [
-            InAppWebView(
-              key: webViewKey,
-              initialUrlRequest: URLRequest(url: initialUrl),
-              initialSettings: InAppWebViewSettings(
-                javaScriptEnabled: true,
-                javaScriptCanOpenWindowsAutomatically: true,
-                mediaPlaybackRequiresUserGesture: false,
-                allowsInlineMediaPlayback: true,
-                useOnDownloadStart: true,
-                useShouldOverrideUrlLoading: true,
-                transparentBackground: false,
-                allowsBackForwardNavigationGestures: true,
-              ),
-              pullToRefreshController: _pullToRefreshController,
-              onWebViewCreated: (controller) async {
-                _controller = controller;
-              },
-              // 웹에서 카메라/마이크 권한 요청 시 자동 허용(안드로이드)
-              onPermissionRequest: (controller, request) async {
-                return PermissionResponse(
-                  resources: request.resources,
-                  action: PermissionResponseAction.GRANT,
-                );
-              },
-              // 웹 geolocation 허용
-              onGeolocationPermissionsShowPrompt: (controller, origin) async {
-                return GeolocationPermissionShowPromptResponse(
-                  origin: origin,
-                  allow: true,
-                  retain: true,
-                );
-              },
-              // window.open/new tab → 같은 WebView에서 열기
-              onCreateWindow: (controller, createWindowAction) async {
-                final targetUrl = createWindowAction.request.url;
-                if (targetUrl != null) {
-                  _controller?.loadUrl(urlRequest: URLRequest(url: targetUrl));
-                  return true; // 우리가 처리함
-                }
-                return false;
-              },
-              onLoadStart: (controller, url) async {
-                setState(() {
-                  _errorMessage = null;
-                });
-              },
-              onLoadStop: (controller, url) async {
-                _pullToRefreshController?.endRefreshing();
-                setState(() => _hadFirstLoad = true);
-              },
-              onLoadError: (controller, url, code, message) {
-                _pullToRefreshController?.endRefreshing();
-                setState(() => _errorMessage = message);
-              },
-              onProgressChanged: (controller, progress) {
-                setState(() => _progress = progress / 100.0);
-                if (progress == 100) {
+        body: SafeArea(
+          top: true,
+          bottom: false,
+          child: Stack(
+            children: [
+              InAppWebView(
+                key: webViewKey,
+                initialUrlRequest: URLRequest(url: initialUrl),
+                initialSettings: InAppWebViewSettings(
+                  javaScriptEnabled: true,
+                  javaScriptCanOpenWindowsAutomatically: true,
+                  mediaPlaybackRequiresUserGesture: false,
+                  allowsInlineMediaPlayback: true,
+                  useOnDownloadStart: true,
+                  useShouldOverrideUrlLoading: true,
+                  transparentBackground: false,
+                  allowsBackForwardNavigationGestures: true,
+                ),
+                pullToRefreshController: _pullToRefreshController,
+                onWebViewCreated: (controller) async {
+                  _controller = controller;
+                },
+                // 웹에서 카메라/마이크 권한 요청 시 자동 허용(안드로이드)
+                onPermissionRequest: (controller, request) async {
+                  return PermissionResponse(
+                    resources: request.resources,
+                    action: PermissionResponseAction.GRANT,
+                  );
+                },
+                // 웹 geolocation 허용
+                onGeolocationPermissionsShowPrompt: (controller, origin) async {
+                  return GeolocationPermissionShowPromptResponse(
+                    origin: origin,
+                    allow: true,
+                    retain: true,
+                  );
+                },
+                // window.open/new tab → 같은 WebView에서 열기
+                onCreateWindow: (controller, createWindowAction) async {
+                  final targetUrl = createWindowAction.request.url;
+                  if (targetUrl != null) {
+                    _controller?.loadUrl(
+                      urlRequest: URLRequest(url: targetUrl),
+                    );
+                    return true; // 우리가 처리함
+                  }
+                  return false;
+                },
+                onLoadStart: (controller, url) async {
+                  setState(() {
+                    _errorMessage = null;
+                  });
+                },
+                onLoadStop: (controller, url) async {
                   _pullToRefreshController?.endRefreshing();
-                }
-              },
-              onConsoleMessage: (controller, consoleMessage) {
-                // 디버깅 시 활성화
-                // debugPrint('[WEB] ${consoleMessage.message}');
-              },
-              shouldOverrideUrlLoading: (controller, navAction) async {
-                final uri = navAction.request.url;
-                if (uri == null) return NavigationActionPolicy.ALLOW;
+                  setState(() => _hadFirstLoad = true);
+                },
+                onLoadError: (controller, url, code, message) {
+                  _pullToRefreshController?.endRefreshing();
+                  setState(() => _errorMessage = message);
+                },
+                onProgressChanged: (controller, progress) {
+                  setState(() => _progress = progress / 100.0);
+                  if (progress == 100) {
+                    _pullToRefreshController?.endRefreshing();
+                  }
+                },
+                onConsoleMessage: (controller, consoleMessage) {
+                  // 디버깅 시 활성화
+                  // debugPrint('[WEB] ${consoleMessage.message}');
+                },
+                shouldOverrideUrlLoading: (controller, navAction) async {
+                  final uri = navAction.request.url;
+                  if (uri == null) {
+                    return NavigationActionPolicy.ALLOW;
+                  }
 
-                // 일반 웹 스킴은 내부에서 열기
-                const allowSchemes = {
-                  'http',
-                  'https',
-                  'file',
-                  'about',
-                  'data',
-                  'javascript',
-                };
-                if (allowSchemes.contains(uri.scheme)) {
+                  // 일반 웹 스킴은 내부에서 열기
+                  const allowSchemes = {
+                    'http',
+                    'https',
+                    'file',
+                    'about',
+                    'data',
+                    'javascript',
+                  };
+                  if (allowSchemes.contains(uri.scheme)) {
+                    return NavigationActionPolicy.ALLOW;
+                  }
+
+                  // tel:, mailto:, intent:, kakaolink: 등은 외부 앱으로
+                  final parsed = Uri.parse(uri.toString());
+                  if (await canLaunchUrl(parsed)) {
+                    await launchUrl(
+                      parsed,
+                      mode: LaunchMode.externalApplication,
+                    );
+                    return NavigationActionPolicy.CANCEL;
+                  }
                   return NavigationActionPolicy.ALLOW;
-                }
+                },
+                onDownloadStartRequest: (controller, request) async {
+                  final url = request.url.toString();
+                  final parsed = Uri.parse(url);
+                  if (await canLaunchUrl(parsed)) {
+                    await launchUrl(
+                      parsed,
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                },
+              ),
 
-                // tel:, mailto:, intent:, kakaolink: 등은 외부 앱으로
-                final parsed = Uri.parse(uri.toString());
-                if (await canLaunchUrl(parsed)) {
-                  await launchUrl(parsed, mode: LaunchMode.externalApplication);
-                  return NavigationActionPolicy.CANCEL;
-                }
-                return NavigationActionPolicy.ALLOW;
-              },
-              onDownloadStartRequest: (controller, request) async {
-                final url = request.url.toString();
-                final parsed = Uri.parse(url);
-                if (await canLaunchUrl(parsed)) {
-                  await launchUrl(parsed, mode: LaunchMode.externalApplication);
-                }
-              },
-            ),
-
-            // 오프라인 배너
-            if (_offline)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  color: Colors.red,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 10,
-                    horizontal: 16,
-                  ),
-                  child: const SafeArea(
-                    bottom: false,
-                    child: Text(
-                      '오프라인 상태입니다',
-                      style: TextStyle(color: Colors.white),
+              // 오프라인 배너
+              if (_offline)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    color: Colors.red,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 10,
+                      horizontal: 16,
+                    ),
+                    child: const SafeArea(
+                      bottom: false,
+                      child: Text(
+                        '오프라인 상태입니다',
+                        style: TextStyle(color: Colors.white),
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-            // 첫 로딩 인디케이터
-            if (!_hadFirstLoad)
-              AnimatedOpacity(
-                opacity: _progress < 1.0 ? 1 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: const Center(child: CircularProgressIndicator()),
-              ),
-
-            // 에러 오버레이
-            if (_errorMessage != null)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.white,
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.wifi_off, size: 48),
-                        const SizedBox(height: 12),
-                        Text(
-                          '페이지를 불러오지 못했습니다.\n$_errorMessage',
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        ElevatedButton(
-                          onPressed: () {
-                            setState(() => _errorMessage = null);
-                            _controller?.reload();
-                          },
-                          child: const Text('다시 시도'),
-                        ),
-                      ],
+              // 첫 로딩 인디케이터 (GIF, status bar 노출)
+              if (!_hadFirstLoad)
+                AnimatedOpacity(
+                  opacity: _progress < 1.0 ? 1 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    margin: EdgeInsets.only(top: mediaPadding.top),
+                    color: Colors.white,
+                    alignment: Alignment.center,
+                    child: Image.asset(
+                      'assets/images/loading.gif',
+                      width: 200,
+                      height: 200,
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ),
-              ),
-          ],
+
+              // 에러 오버레이
+              if (_errorMessage != null)
+                Positioned.fill(
+                  child: Container(
+                    color: Colors.white,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.wifi_off, size: 48),
+                          const SizedBox(height: 12),
+                          Text(
+                            '페이지를 불러오지 못했습니다.\n$_errorMessage',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() => _errorMessage = null);
+                              _controller?.reload();
+                            },
+                            child: const Text('다시 시도'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
