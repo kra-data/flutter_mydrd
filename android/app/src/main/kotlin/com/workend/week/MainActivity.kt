@@ -1,4 +1,4 @@
-package com.example.my_attendance_app
+package com.workend.week
 
 import io.flutter.embedding.android.FlutterActivity
 

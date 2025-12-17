@@ -6,6 +6,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:app_links/app_links.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,16 +54,17 @@ class _WebShellState extends State<WebShell> {
   final GlobalKey webViewKey = GlobalKey();
   InAppWebViewController? _controller;
   PullToRefreshController? _pullToRefreshController;
+  AppLinks? _appLinks;
 
   String _url = dotenv.env['WEB_APP_URL']?.trim() ?? '';
-  double _progress = 0;
 
   // UX 튜닝 상태값들
   StreamSubscription? _connSub;
+  StreamSubscription<Uri>? _linkSub;
   bool _offline = false;
-  bool _hadFirstLoad = false;
   String? _errorMessage;
   DateTime? _lastBackPress;
+  String? _pendingDeepLinkUrl;
 
   @override
   void initState() {
@@ -102,18 +104,23 @@ class _WebShellState extends State<WebShell> {
       }
       if (mounted) setState(() => _offline = off);
     });
+
+    _initDeepLinks();
   }
 
   @override
   void dispose() {
     _connSub?.cancel();
+    _linkSub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final initialUrl = _url.isEmpty ? WebUri('about:blank') : WebUri(_url);
-    final mediaPadding = MediaQuery.of(context).padding;
+    final initialUrlString = (_pendingDeepLinkUrl ?? _url).trim();
+    final initialUrl = initialUrlString.isEmpty
+        ? WebUri('about:blank')
+        : WebUri(initialUrlString);
 
     return WillPopScope(
       onWillPop: () async {
@@ -158,6 +165,13 @@ class _WebShellState extends State<WebShell> {
                 pullToRefreshController: _pullToRefreshController,
                 onWebViewCreated: (controller) async {
                   _controller = controller;
+                  final pending = _pendingDeepLinkUrl;
+                  if (pending != null && pending.isNotEmpty) {
+                    _pendingDeepLinkUrl = null;
+                    await _controller?.loadUrl(
+                      urlRequest: URLRequest(url: WebUri(pending)),
+                    );
+                  }
                 },
                 // 웹에서 카메라/마이크 권한 요청 시 자동 허용(안드로이드)
                 onPermissionRequest: (controller, request) async {
@@ -192,14 +206,12 @@ class _WebShellState extends State<WebShell> {
                 },
                 onLoadStop: (controller, url) async {
                   _pullToRefreshController?.endRefreshing();
-                  setState(() => _hadFirstLoad = true);
                 },
                 onLoadError: (controller, url, code, message) {
                   _pullToRefreshController?.endRefreshing();
                   setState(() => _errorMessage = message);
                 },
                 onProgressChanged: (controller, progress) {
-                  setState(() => _progress = progress / 100.0);
                   if (progress == 100) {
                     _pullToRefreshController?.endRefreshing();
                   }
@@ -272,24 +284,6 @@ class _WebShellState extends State<WebShell> {
                   ),
                 ),
 
-              // 첫 로딩 인디케이터 (GIF, status bar 노출)
-              if (!_hadFirstLoad)
-                AnimatedOpacity(
-                  opacity: _progress < 1.0 ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Container(
-                    margin: EdgeInsets.only(top: mediaPadding.top),
-                    color: Colors.white,
-                    alignment: Alignment.center,
-                    child: Image.asset(
-                      'assets/images/loading.gif',
-                      width: 200,
-                      height: 200,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-
               // 에러 오버레이
               if (_errorMessage != null)
                 Positioned.fill(
@@ -323,5 +317,52 @@ class _WebShellState extends State<WebShell> {
         ),
       ),
     );
+  }
+
+  Future<void> _initDeepLinks() async {
+    _appLinks ??= AppLinks();
+
+    // 앱이 링크로 시작된 경우 처리
+    try {
+      final initialUri = await _appLinks?.getInitialLink();
+      if (initialUri != null) {
+        _handleIncomingUri(initialUri);
+      }
+    } catch (e) {
+      debugPrint('Failed to get initial URI: $e');
+    }
+
+    // 실행 중 링크 수신
+    _linkSub = _appLinks?.uriLinkStream.listen(
+      (uri) => _handleIncomingUri(uri),
+      onError: (err) => debugPrint('URI stream error: $err'),
+    );
+  }
+
+  void _handleIncomingUri(Uri uri) {
+    // 기대 형식: mydreamday://invite/accept?shopId=...&invite=...&phone=...
+    if (uri.scheme != 'mydreamday') return;
+    if (uri.host != 'invite' || uri.path != '/accept') return;
+
+    final shopId = uri.queryParameters['shopId'];
+    final invite = uri.queryParameters['invite'];
+    final phone = uri.queryParameters['phone'];
+    if ([shopId, invite, phone].any((v) => v == null || v.isEmpty)) return;
+
+    final target = 'https://mydreamday.shop/invite/accept?shopId=$shopId';
+    _loadDeepLinkUrl(target);
+  }
+
+  void _loadDeepLinkUrl(String url) {
+    _pendingDeepLinkUrl = url;
+    final controller = _controller;
+    if (controller != null) {
+      controller.loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+      _pendingDeepLinkUrl = null;
+    }
+    setState(() {
+      _url = url;
+      _errorMessage = null;
+    });
   }
 }
